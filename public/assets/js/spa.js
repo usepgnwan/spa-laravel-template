@@ -1,11 +1,11 @@
 (function($) {
      
     window.title = document.querySelector("title");
-    window.webname = window.title.text
+    let accountStore = ug.getStore('account');
+    window.webname = accountStore.name ?? window.title.text
     var $ajaxMenuRequest = undefined;
     var pushstate = undefined; 
     let parent = $(".sidebar-nav-account").find("a.spa-link");
- 
     // console.log(parent)
     // let a = $('.alink-click'); 
     // $.each(a,function(i,val){
@@ -18,16 +18,26 @@
     //         }
     //         v.addClass('router-link-exact-active');
     //     }
-    // }); 
+    // });
+    let popurl =''
+    if(ug.url_route !== ''){
+        parent.each(function(i,$target){ 
+            let Thisurl = $($target).attr('href');
+            let pregurl =  Thisurl.replace(/#/g,"");
+            if(ug.url_route == pregurl){
+                popurl = Thisurl;
+            }
+        });
+    }
     parent.click(function(e){
         e.preventDefault();
-
         if( $ajaxMenuRequest ){
             $ajaxMenuRequest.abort();
         }
 
         let $this = $(this);
-        let $url = $this.attr("href");
+        let href = $this.attr("href"); 
+        let $url = popurl  != '' ? popurl : href;
         let $targetID = "main.content-page-first";
         let $target = $($targetID);
 
@@ -39,16 +49,16 @@
                         </div>`;
         $target.html($loader);
 
-
-        let $urla =  $url.replace(/#/g,"");
+        let $urla = $url.replace(/#/g,"");
             // $urla = String($urla).includes('.html') ? String($urla).replace('.html','') : $urla;
-        // console.log($urla);
+        
         let $post = {};
 
         $ajaxMenuRequest = $.get($urla,$post, function (html) {
+            $target.html('');
             $target.html(html);
         }).fail(function(e) { 
-            console.log(e);
+            // console.log(e);
             toastr["error"](`Something wrong! ${ e.statusText }`);
             let $error = `<div class="row ml-2 mr-2">
                 <div class="col-md-12">
@@ -74,15 +84,15 @@
             </div>`; 
             $target.html($error);
         });
-
+        // console.log($urla + ' -- ' + window.location)
         if($urla!=window.location){
-            // console.log($urla + ' -- ' + window.location)
             var $pushStateID = $this.attr("pushState");
             if($pushStateID =="" || $pushStateID == undefined){
                 var $time = new Date().getTime();
                 $pushStateID = "a_" + $time;
                 $this.attr("pushState",$pushStateID);
             }
+            popurl = '';
             window.history.pushState({ path:$url,ytarget: $targetID,ypost:$post ,yevent:'click' ,ypushState:  $pushStateID  },'',$url); 
         }
         // console.log( parent);
@@ -113,17 +123,22 @@
         return false;
     });
 
-   let  check = String(window.location.href).includes('#') ? `${ ROOTSITE }/#${( String(window.location.href).split("#")[1] || "" )}` : window.location.href; 
+   let  check = String(window.location.href).includes('#') ? `${ ROOTSITE }/account/#${( String(window.location.href).split("#")[1] || "" )}` : window.location.href;
  
    var selectedMenu = $(`a.spa-link[href="${check}"]`).first();  
     if( selectedMenu.length ){
         selectedMenu.click();
     }else{
-        parent.first().click();
+        parent.first().click(); 
     }
 
     $(window).on('popstate', function(event) { 
         let prev_location = window.location;
         $(`a.spa-link[href="${ prev_location }"]`).first().click();  
     });
+    
+    $('.copyright').html( "&copy; " + (accountStore.name ?? ''));
+    $('.my-image').attr('src',accountStore.image ?? '');
+    $('.label-name').html(accountStore.name ?? ''); 
+    $('link[name="icon"]').attr('href', accountStore.image ?? '') 
 })(jQuery);

@@ -1,6 +1,7 @@
 var ug = {}; 
 ;(function(ug) {
     ug.csrftoken = $('meta[name="csrf-token"]').attr('content')
+    ug.url_route = $('meta[name="url-route"]').attr('content')
     ug.require	=  function ( $js ,$callback,$basePath){
                     var $n = 0;
                     for( var u=0;u < $js.length;u++ ){
@@ -53,6 +54,7 @@ var ug = {};
     };
     ug.post = function(url, data = {}, func=false,$dataType, $opt, $type){
         if( typeof data != 'object'){
+            ug.alert('error data')
             return data;
         } 
         var $option = {
@@ -85,10 +87,12 @@ var ug = {};
                     $option["errorCallback"](jqXHR.responseText);
                 }else{
                     $msg = JSON.stringify(jqXHR); 
-                    if( $dataType == 'json') {
-                        console.log(jqXHR.responseText);
-                    }
                     ug.alert("ERROR CODE : " + jqXHR.status + ":::" + jqXHR.statusText);
+                    if( $dataType == 'json') {
+                        let obj = JSON.parse(jqXHR.responseText);
+                        func(obj);
+                        return;
+                    }
                     func('error');
                 }
             }); 
@@ -117,15 +121,87 @@ var ug = {};
         $.each($form.serializeArray(), extend); 
         return result;
     };
+    ug.action =  function(type,url, data = {}, func,$dataType, $opt){ 
+        ug.post(url, data = {}, func,$dataType, $opt, type);
+    }
+
+    // add local storage 
+    ug.checkStore = function(){
+        return typeof(Storage) !== "undefined";
+    }
+    ug.addStore = function(cache_key,data){
+        if (ug.checkStore()) {
+            // let historyData = null;
+            // if (localStorage.getItem(cache_key) === null) {
+            //     historyData = [];
+            // } else {
+            //     historyData = JSON.parse(localStorage.getItem(cache_key));
+            // }
+    
+            // historyData.unshift(data); // tambahkan komen
+            // if (historyData.length > 6) {
+            //     historyData.pop(); //batasi
+            // }
+    
+            localStorage.setItem(cache_key, JSON.stringify(data));
+        }
+    }
+    ug.getStore = function(CACHE_KEY) {
+        if (ug.checkStore()) {
+            return JSON.parse(localStorage.getItem(CACHE_KEY)) || [];
+        } else {
+            return [];
+        }
+    } 
+    ug.deleteStore =  function (CACHE_KEY) {
+        const hapus = confirm('yakin hapus komenya?');
+        if (hapus) { 
+            localStorage.removeItem(CACHE_KEY);
+            alert('berhasil dihapus !');
+        }
+    }
+    ug.encrypt64 = function (key){
+        return btoa(key);
+    }
+    ug.decrypt64 = function (key){
+        return atob(key);
+    }
+    ug.validate  =function($form, data){
+        $.each($form,function(i,v){
+            let $value = $(v);
+            let name = $value.attr('name');
+            if((data[name] != undefined && $value.attr('type') != 'hidden' )){
+                $value.addClass('is-invalid');
+                let invalid = $value.closest('div').find('.invalid-feedback');
+                if(invalid.length <= 0){
+                    $value.after(`  
+                                <div class="invalid-feedback">
+                                    ${ data[name][0] }
+                                </div>`);
+                }else{
+                    invalid.html(` ${ data[name][0] }`);
+                }
+            }else{
+                if( $value.attr('type') != 'hidden' ){
+                    if($value.hasClass('cst-select2')){
+                        $value.removeClass('is-invalid');
+                        $value.closest('div').find('.invalid-feedback').remove();
+                    }else{
+                        $value.removeClass('is-invalid').next().remove();
+                    }
+                }
+            }
+        });
+    }
 })( ug || {});
 
 
 (function ($) {
 	"use strict";
     $.fn.extend({
-        myfunc : function(options, arg1,arg2,arg3,arg4,arg5) { 
+        confirm : function(options, arg1,arg2,arg3,arg4,arg5) { 
             this.each(function() {
-                 new $.MyFunc(this, options, arg1,arg2,arg3,arg4,arg5 );
+                 new $.confirm(this, options, arg1,arg2,arg3,arg4,arg5 );
             });
             return this;
         },
@@ -144,8 +220,15 @@ var ug = {};
         }
     });
     
-    $.MyFunc = function( ctl, options, arg1,arg2,arg3,arg4,arg5) {
-       alert(ctl)
+    $.confirm = function( ctl='', options, arg1,arg2,arg3,arg4,arg5) {
+        BootstrapDialog.confirm({
+            title: 'WARNING!!',
+            message: ctl, 
+            type: BootstrapDialog.TYPE_DANGER,
+            btnOKLabel: arg1 ?? 'Delete',
+            btnOKClass: 'btn-danger',
+            callback :  options
+        });
     };
     $.MyModal = function( url, datapost, $opt) {
         if( datapost == undefined ) datapost = {};
@@ -212,6 +295,22 @@ var ug = {};
                     return func(resp)
                 },datataype,dataTambahan);
                 // return func(resp);
+            },
+            validateForm : function(form, nameindex, data){ 
+                let $form = $(form).find('.form-control');
+                let $formSelect = $(form).find('.form-select'); 
+                let $formSelect2 = $(form).find('.cst-select2');
+
+                if($form.length > 0){
+                    ug.validate( $form , data) 
+                }
+                if($formSelect.length > 0){
+                    ug.validate( $formSelect , data) 
+                }
+                if($formSelect2.length > 0){
+                    ug.validate( $formSelect2 , data) 
+                }
+               
             }
         };
  
@@ -221,44 +320,35 @@ var ug = {};
             console.log("Tidak menemukan method "+elem);
         }
     }
-})(jQuery); 
+})(jQuery);
 
 $('body').on("DOMNodeInserted", function(event) {
-        var $eTarget = $(event.target); 
-            /**
-             * Initiate tooltips
-             */
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-            var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl)
-            })
+    var $eTarget = $(event.target); 
 
-        if( $eTarget.hasClass("content-page-first")){
-            // $($eTarget).select2(); 
-            // $($eTarget).select2({
-            //     width: "100%"
-            // });
-            let html = $($eTarget).html(); 
-            // find select2
-            let select2 = $(html).find('select.cst-select2');
-            if(select2){
-                select2.each(function(i,$target){ 
-                    let name = "." + $target.className;
-                    $(name).select2({width:"100%"});
-                }); 
-                // theme:"bootstrap"
-
-            } 
-        } 
+     
+        /**
+         * Initiate tooltips
+         */
+        // var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        // var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+        //     return new bootstrap.Tooltip(tooltipTriggerEl)
+        // })
+        if($eTarget.find('[data-bs-toggle="tooltip"]').length >= 1){
+           let tooltip = $eTarget.find('[data-bs-toggle="tooltip"]');
+           $.each(tooltip,function(i,v){
+                return new bootstrap.Tooltip(v)
+           });
+        }
+ 
         
         // simple datatable instance
-        if( $eTarget.find('table').hasClass("datatable")){
-            let datatables = $eTarget.find('table.datatable');
-            // console.log(datatables);
-            $.each(datatables, function(i,v){
-                new simpleDatatables.DataTable( v );
-            }); 
-        }
+        // if( $eTarget.find('table').hasClass("datatable")){
+        //     let datatables = $eTarget.find('table.datatable');
+        //     // console.log(datatables);
+        //     $.each(datatables, function(i,v){
+        //         new simpleDatatables.DataTable( v );
+        //     }); 
+        // }
         // datatable
         if( $eTarget.find('table').hasClass("ug-table")){
             let ugtable = $eTarget.find('table.ug-table');
@@ -269,4 +359,27 @@ $('body').on("DOMNodeInserted", function(event) {
             });
         }
       
+        // disabled enter
+        
+        $eTarget.find('div.row').find('form').each(function(i,$target){
+            if(!$($target).hasClass('submit')){
+                $($target).on("keydown",function(event){ return event.key != "Enter"  });
+            }
+        });
+     
+        if( $eTarget.find('div.row').find("select.cst-select2")){  
+            let select2 = $eTarget.find('div.row').find("select.cst-select2") 
+            if(select2){
+                select2.each(function(i,$target){ 
+                    let name = "." + $target.className.trim();
+                  
+                    $(name).select2({width:"100%", dropdownParent: $(this).parent(),  theme: 'bootstrap-5'});
+                }); 
+                // theme:"bootstrap"
+
+            } 
+        } 
+        // $eTarget.find("form").each(function(i,$target){
+        //     $($target).on("keydown",function(event){ return event.key != "Enter"  });
+        // }); 
 });
